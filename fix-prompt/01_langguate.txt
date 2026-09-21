@@ -1,0 +1,500 @@
+You are working on my existing **IP-SAKTI / Anvesh AI** application.
+
+I have already integrated my frontend with my FastAPI backend. I now want to implement and properly test the **first module in the AI pipeline: Language Detection & Language Handling Agent**.
+
+## IMPORTANT
+
+* Work with my **existing codebase**.
+* Do NOT redesign the frontend.
+* Do NOT create a new architecture unnecessarily.
+* Do NOT modify unrelated agents/modules.
+* Do NOT implement jurisdiction detection, IP routing, formulation classification, patent analysis, TK analysis, ABS analysis, or international analysis yet.
+* Do NOT create unnecessary JSON datasets or large test files.
+* Reuse existing utilities, LLM configuration, API structure, and response format wherever possible.
+* First inspect the existing backend and understand how `/ask` currently works.
+* Make the smallest clean changes required.
+* Keep the implementation beginner-readable and modular.
+
+---
+
+# OBJECTIVE
+
+Implement a **Language Detection / Language Handling module** that sits at the beginning of the query pipeline.
+
+The pipeline should conceptually become:
+
+USER QUERY
+↓
+LANGUAGE DETECTION
+↓
+NORMALIZED QUERY
+↓
+existing backend pipeline
+↓
+FINAL ANSWER
+↓
+TRANSLATE ANSWER TO USER'S LANGUAGE
+↓
+RESPONSE
+
+For the current implementation, support:
+
+* English
+* Hindi
+* Kannada
+
+Also handle mixed-language queries such as:
+
+> "Mujhe neem ke formulation ka patent lena hai India mein."
+
+---
+
+# 1. INSPECT THE EXISTING CODE FIRST
+
+Before changing anything:
+
+1. Find the current FastAPI `/ask` endpoint.
+2. Find the current RAG/query-processing function.
+3. Find the current LLM initialization.
+4. Find whether translation or language detection already exists.
+5. Find the current request and response schemas.
+6. Identify where the final answer is generated.
+7. Preserve the existing API contract wherever possible so the frontend does not break.
+
+Do not duplicate an existing language/translation implementation.
+
+---
+
+# 2. CREATE A SMALL LANGUAGE MODULE
+
+Create a simple reusable language module only if an equivalent module does not already exist.
+
+It should provide functionality conceptually similar to:
+
+```python
+detect_language(query)
+normalize_query(query, language)
+translate_response(answer, target_language)
+```
+
+Use the existing LLM/provider in the project if appropriate.
+
+Do not introduce another LLM provider just for this feature.
+
+---
+
+# 3. LANGUAGE DETECTION
+
+Detect the user's input language.
+
+Return one of:
+
+```text
+en
+hi
+kn
+unknown
+```
+
+Examples:
+
+```text
+"Can I patent my Ayurvedic formulation?"
+→ en
+```
+
+```text
+"क्या मैं अपनी आयुर्वेदिक दवा का पेटेंट करा सकता हूँ?"
+→ hi
+```
+
+```text
+"ನನ್ನ ಆಯುರ್ವೇದಿಕ್ ಫಾರ್ಮುಲೇಶನ್‌ಗೆ ಪೇಟೆಂಟ್ ಪಡೆಯಬಹುದೇ?"
+→ kn
+```
+
+For mixed Hindi-English:
+
+```text
+"Mujhe neem ke formulation ka patent lena hai."
+→ hi
+```
+
+Do not force every mixed query into English just because it contains English technical terms.
+
+---
+
+# 4. NORMALIZATION
+
+The internal RAG pipeline should preferably work with a normalized English query because the current knowledge base may primarily contain English legal/IP documents.
+
+Example:
+
+User:
+
+```text
+"क्या मैं नीम और हल्दी की formulation को भारत में patent कर सकता हूँ?"
+```
+
+Internal normalized query:
+
+```text
+"Can I patent a formulation containing neem and turmeric in India?"
+```
+
+IMPORTANT:
+
+Normalization must preserve:
+
+* technical meaning
+* ingredient names
+* scientific names
+* patent terminology
+* legal terminology
+* jurisdiction names
+* numbers
+* proper nouns
+
+Do not unnecessarily rewrite the user's question.
+
+---
+
+# 5. RESPONSE LANGUAGE
+
+Store the detected language as part of the query-processing context.
+
+Example:
+
+```python
+language = "hi"
+```
+
+The downstream pipeline can work internally in English.
+
+The final answer must be translated back into the user's detected language.
+
+Example:
+
+```text
+User language: Hindi
+
+Internal processing:
+English
+
+Final response:
+Hindi
+```
+
+For English:
+
+```text
+English input
+→ English processing
+→ English response
+```
+
+For Kannada:
+
+```text
+Kannada input
+→ English processing
+→ Kannada response
+```
+
+---
+
+# 6. DO NOT TRANSLATE IMPORTANT TECHNICAL ELEMENTS INCORRECTLY
+
+During translation, preserve:
+
+* Act names
+* Section numbers
+* Patent numbers
+* Source names
+* URLs
+* Citations
+* Scientific names
+* Ingredient names
+* Organization names
+* Confidence indicators
+* Disclaimer meaning
+
+For example, don't translate:
+
+```text
+Patents Act, 1970
+Section 3(p)
+WIPO
+TKDL
+```
+
+into meaningless literal translations.
+
+---
+
+# 7. UNKNOWN LANGUAGE
+
+If the language cannot confidently be identified:
+
+```text
+language = "unknown"
+```
+
+Do not hallucinate a language.
+
+In this case:
+
+* keep the original query
+* continue safely if possible
+* otherwise ask the user to select English, Hindi, or Kannada
+
+Do not break the existing API.
+
+---
+
+# 8. RESPONSE METADATA
+
+If the existing API response structure allows it, include lightweight metadata such as:
+
+```text
+detected_language
+response_language
+```
+
+Example:
+
+```json
+{
+  "answer": "...",
+  "detected_language": "hi",
+  "response_language": "hi"
+}
+```
+
+However, if changing the response schema would break the existing frontend, preserve the current schema and keep this information internal.
+
+Do NOT unnecessarily modify frontend components.
+
+---
+
+# 9. IMPORTANT PIPELINE RULE
+
+The language module must run BEFORE the other future agents.
+
+For now the pipeline should be:
+
+```text
+User Query
+    ↓
+Language Detection
+    ↓
+Query Normalization
+    ↓
+Existing /ask Pipeline
+    ↓
+Grounded Answer
+    ↓
+Translation
+    ↓
+Final Response
+```
+
+Do not implement the future agents yet.
+
+The architecture should make it easy to add them later.
+
+---
+
+# 10. ERROR HANDLING
+
+The language module must not crash the complete `/ask` endpoint.
+
+If language detection fails:
+
+```text
+fallback → English / original query
+```
+
+If translation fails:
+
+```text
+fallback → original grounded answer
+```
+
+Do not return an empty response.
+
+Do not hide backend errors silently.
+
+Use the project's existing logging/error-handling approach.
+
+---
+
+# 11. TEST THE IMPLEMENTATION
+
+After implementation, actually run the backend and test the API.
+
+Do NOT just tell me that it should work.
+
+Use these test prompts.
+
+### TEST 1 — English
+
+```text
+Can I patent my Ayurvedic formulation containing neem and turmeric in India?
+```
+
+Expected:
+
+```text
+detected_language = en
+response_language = en
+```
+
+The answer should remain in English.
+
+---
+
+### TEST 2 — Hindi
+
+```text
+क्या मैं नीम और हल्दी से बनी अपनी आयुर्वेदिक फॉर्मूलेशन का भारत में पेटेंट करा सकता हूँ?
+```
+
+Expected:
+
+```text
+detected_language = hi
+response_language = hi
+```
+
+The final answer should be Hindi.
+
+---
+
+### TEST 3 — Kannada
+
+```text
+ನನ್ನ ಬೇವು ಮತ್ತು ಅರಿಶಿನದ ಆಯುರ್ವೇದಿಕ್ ಫಾರ್ಮುಲೇಶನ್‌ಗೆ ಭಾರತದಲ್ಲಿ ಪೇಟೆಂಟ್ ಪಡೆಯಬಹುದೇ?
+```
+
+Expected:
+
+```text
+detected_language = kn
+response_language = kn
+```
+
+The final answer should be Kannada.
+
+---
+
+### TEST 4 — Hinglish
+
+```text
+Mujhe neem aur turmeric se banaye formulation ka India mein patent lena hai.
+```
+
+Expected:
+
+```text
+detected_language = hi
+```
+
+The final response should preferably be Hindi/Hinglish according to the existing language-handling design, while preserving technical terms such as Patent, India, neem and turmeric correctly.
+
+---
+
+### TEST 5 — English with technical terms
+
+```text
+What does Section 3(p) of the Patents Act mean for traditional knowledge?
+```
+
+Expected:
+
+```text
+detected_language = en
+```
+
+The final answer must preserve:
+
+```text
+Section 3(p)
+Patents Act
+traditional knowledge
+```
+
+and must not corrupt citations or legal terminology.
+
+---
+
+# 12. TEST REPORT
+
+After testing, report the results in this exact simple format:
+
+```text
+LANGUAGE AGENT TEST
+
+Test 1:
+Input:
+Detected:
+Normalized:
+Response Language:
+Status:
+
+Test 2:
+Input:
+Detected:
+Normalized:
+Response Language:
+Status:
+
+Test 3:
+Input:
+Detected:
+Normalized:
+Response Language:
+Status:
+
+Test 4:
+Input:
+Detected:
+Normalized:
+Response Language:
+Status:
+
+Test 5:
+Input:
+Detected:
+Normalized:
+Response Language:
+Status:
+```
+
+For each failed test, show:
+
+```text
+Problem:
+Root Cause:
+File:
+Fix:
+```
+
+Do not claim a test passed unless you actually ran it.
+
+---
+
+# 13. FINAL REQUIREMENT
+
+At the end, give me:
+
+1. Files changed
+2. What was implemented
+3. Test results
+4. Any remaining issue
+
+Do NOT move on to the next agent.
+
+Do NOT implement Jurisdiction Agent yet.
+
+The next stage will only begin after this Language Agent is working correctly.
