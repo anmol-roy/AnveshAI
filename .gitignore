@@ -1,0 +1,80 @@
+# Root project ignores
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# Python virtual environments
+.venv/
+venv/
+env/
+server/.venv/
+server/venv/
+
+# Python cache and compiled files
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node / frontend build artifacts
+client/node_modules/
+client/.next/
+client/out/
+client/.vercel/
+client/dist/
+
+# Data and generated outputs
+server/data/
+server/qdrant_db/
+server/*.log
+server/*_results.json
+server/bm25_index.pkl
+server/q.json
+server/query.json
+server/resp.json
+server/results/
+server/coverage/
+server/.cache/
+server/.pytest_cache/
+
+# Local docs / scratch / prompt folders
+fix-prompt/
+notes/
+scratch/
+_tmp/
+.temp/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Build / packaging artifacts
+build/
+dist/
+*.egg-info/
+*.tar.gz
+*.zip
+
+# Ignore large generated corpora and indexes
+**/qdrant_db/
+**/data/raw/
+**/data/processed/
+**/data/graph/
+**/data/formulation/
+**/data/multilingual/
+
+# Keep source code tracked; ignore only generated outputs
+!server/src/
+!client/app/
+!client/components/
+!client/lib/
+!client/public/

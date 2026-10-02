@@ -1,0 +1,716 @@
+You are working on my existing **IP-SAKTI / Anvesh AI** application.
+
+The following modules are already implemented and tested:
+
+1. Language Detection & Handling
+2. Scope & Guardrail
+
+Now implement **Agent 3: Jurisdiction Detection & Routing**.
+
+Do NOT implement the IP Type Router or any later investigation agents yet.
+
+---
+
+# OBJECTIVE
+
+The Jurisdiction Agent must determine the legal/geographical jurisdiction relevant to the user's question.
+
+Supported values:
+
+```text
+india
+international
+both
+unclear
+```
+
+The agent must use:
+
+1. Explicit jurisdiction selected by the user in the frontend, if available.
+2. Explicit jurisdiction mentioned in the user's query.
+3. Context from the conversation/query.
+4. Only then infer jurisdiction when reasonably clear.
+
+Do NOT make unsupported assumptions.
+
+---
+
+# IMPORTANT PRIORITY RULE
+
+If the user explicitly selects a jurisdiction in the frontend, that selection has the highest priority.
+
+For example:
+
+```text
+Frontend selection = India
+User query = "How is this handled internationally?"
+```
+
+For the current request, use the explicit frontend selection only if the application's existing UX defines the selector as a hard filter.
+
+If the selector is intended as a query context rather than a hard filter, preserve the user's explicit query intent and mark the result appropriately.
+
+Inspect the existing frontend/backend implementation before deciding how the current selector works.
+
+Do NOT redesign the selector.
+
+---
+
+# TARGET PIPELINE
+
+The pipeline should now be:
+
+```text
+USER QUERY
+    ↓
+LANGUAGE
+    ↓
+SCOPE / GUARDRAIL
+    ↓
+JURISDICTION
+    ↓
+EXISTING PROCESSING
+    ↓
+FINAL RESPONSE
+```
+
+Future:
+
+```text
+JURISDICTION
+    ↓
+IP TYPE
+    ↓
+FORMULATION
+    ↓
+ORCHESTRATOR
+```
+
+Do not implement those future modules yet.
+
+---
+
+# 1. EXPLICIT INDIA QUERIES
+
+Detect India when the user clearly refers to:
+
+* India
+* Indian law
+* Indian patent
+* Indian trademark
+* Indian copyright
+* Indian design
+* Indian GI
+* Indian biodiversity law
+* Indian patent office
+* IP India
+* Indian traditional knowledge
+* Indian AYUSH regulations
+
+Examples:
+
+```text
+Can I patent my Ayurvedic formulation in India?
+```
+
+Expected:
+
+```text
+jurisdiction = india
+```
+
+```text
+What does Indian patent law say about traditional knowledge?
+```
+
+Expected:
+
+```text
+jurisdiction = india
+```
+
+---
+
+# 2. EXPLICIT INTERNATIONAL QUERIES
+
+Detect `international` when the user clearly asks about:
+
+* international protection
+* PCT
+* WIPO
+* TRIPS
+* Paris Convention
+* international patent filing
+* international IP framework
+* protection outside India
+
+Example:
+
+```text
+How can I seek international patent protection for my Ayurvedic invention?
+```
+
+Expected:
+
+```text
+jurisdiction = international
+```
+
+Example:
+
+```text
+How does the PCT process work?
+```
+
+Expected:
+
+```text
+jurisdiction = international
+```
+
+---
+
+# 3. BOTH JURISDICTIONS
+
+Return:
+
+```text
+jurisdiction = both
+```
+
+when the user explicitly asks for a comparison or information covering India AND an international framework.
+
+Example:
+
+```text
+How does patent protection in India differ from the international PCT route?
+```
+
+Expected:
+
+```text
+both
+```
+
+Example:
+
+```text
+I want to patent my Ayurvedic invention in India and internationally. What should I investigate?
+```
+
+Expected:
+
+```text
+both
+```
+
+---
+
+# 4. UNCLEAR JURISDICTION
+
+Do NOT automatically assume India just because the product is Ayurvedic or the user mentions Indian traditional knowledge.
+
+Example:
+
+```text
+Can I patent this Ayurvedic formulation?
+```
+
+Expected:
+
+```text
+jurisdiction = unclear
+```
+
+The system should either:
+
+* ask which jurisdiction the user is interested in, OR
+* continue with a general answer while clearly identifying that jurisdiction-specific analysis requires clarification.
+
+Prefer clarification when the legal answer would materially differ by jurisdiction.
+
+Another example:
+
+```text
+What IP protection is available for my formulation?
+```
+
+Expected:
+
+```text
+unclear
+```
+
+---
+
+# 5. AYURVEDA DOES NOT AUTOMATICALLY MEAN INDIA
+
+This is important.
+
+Do NOT implement:
+
+```text
+Ayurveda → India
+```
+
+as a hard rule.
+
+Example:
+
+```text
+I developed an Ayurvedic formulation and want to protect it in Europe.
+```
+
+Expected:
+
+```text
+international
+```
+
+The formulation's origin and the requested legal jurisdiction are separate concepts.
+
+---
+
+# 6. JURISDICTION METADATA
+
+Add jurisdiction to the existing processing context.
+
+Conceptually:
+
+```python
+{
+    "original_query": "...",
+    "normalized_query": "...",
+    "language": "en",
+    "scope": "in_scope",
+    "jurisdiction": "india"
+}
+```
+
+Use the existing project structure rather than creating duplicate state objects.
+
+---
+
+# 7. RETRIEVAL FILTERING
+
+For now, do not build a new retrieval system.
+
+Instead, make sure the jurisdiction result is available to the existing RAG/retrieval layer so that the next implementation can use it.
+
+The intended future behavior is:
+
+```text
+jurisdiction = india
+        ↓
+prefer India legal sources
+```
+
+and:
+
+```text
+jurisdiction = international
+        ↓
+prefer international sources
+```
+
+and:
+
+```text
+jurisdiction = both
+        ↓
+retrieve India evidence separately
++
+retrieve international evidence separately
+```
+
+IMPORTANT:
+
+Do NOT mix India and international legal evidence into one undifferentiated answer.
+
+The architecture should preserve the separation.
+
+---
+
+# 8. BOTH JURISDICTION RESPONSE STRUCTURE
+
+When jurisdiction is `both`, prepare the context so the final answer can later be structured as:
+
+```text
+INDIA
+- Evidence
+- Relevant framework
+- Sources
+
+INTERNATIONAL
+- Evidence
+- Relevant framework
+- Sources
+
+KEY DIFFERENCE
+- Clearly stated comparison
+```
+
+Do not implement a complete new answer generator now.
+
+Only ensure the jurisdiction context is available to downstream processing.
+
+---
+
+# 9. CONFLICTING JURISDICTION
+
+Example:
+
+```text
+Frontend selector = India
+
+User query = "What does the PCT system require?"
+```
+
+Do not silently hide the conflict.
+
+Handle it according to the existing UI semantics.
+
+If the selector is a hard jurisdiction filter, explain that the current context is India and the user is asking about an international framework.
+
+If the selector is a contextual preference, allow the explicit query to identify international jurisdiction.
+
+Inspect the current code and preserve the intended behavior.
+
+---
+
+# 10. CONVERSATIONAL CONTEXT
+
+If the existing `/ask` endpoint supports conversation history, use it carefully.
+
+Example:
+
+User:
+
+> I have developed a new Ayurvedic formulation.
+
+Then:
+
+> Can I patent it in India?
+
+The second query should detect:
+
+```text
+india
+```
+
+If the user says:
+
+> What about internationally?
+
+The new jurisdiction should become:
+
+```text
+international
+```
+
+Do not permanently lock jurisdiction to the first message.
+
+The latest explicit jurisdiction should update the current request.
+
+---
+
+# 11. TESTING
+
+Actually run the backend and frontend integration.
+
+Do not just inspect code.
+
+## TEST 1 — India
+
+```text
+Can I patent my Ayurvedic formulation in India?
+```
+
+Expected:
+
+```text
+jurisdiction = india
+```
+
+---
+
+## TEST 2 — Indian Law
+
+```text
+What does Indian patent law say about traditional knowledge?
+```
+
+Expected:
+
+```text
+jurisdiction = india
+```
+
+---
+
+## TEST 3 — International
+
+```text
+How can I protect my Ayurvedic invention internationally?
+```
+
+Expected:
+
+```text
+jurisdiction = international
+```
+
+---
+
+## TEST 4 — PCT
+
+```text
+How does the PCT process work for an invention?
+```
+
+Expected:
+
+```text
+jurisdiction = international
+```
+
+---
+
+## TEST 5 — India + International
+
+```text
+What is the difference between filing a patent in India and using the international PCT route?
+```
+
+Expected:
+
+```text
+jurisdiction = both
+```
+
+---
+
+## TEST 6 — Explicit Both
+
+```text
+I want to protect my Ayurvedic invention in India and internationally. What should I consider?
+```
+
+Expected:
+
+```text
+jurisdiction = both
+```
+
+---
+
+## TEST 7 — Unclear
+
+```text
+Can I patent my Ayurvedic formulation?
+```
+
+Expected:
+
+```text
+jurisdiction = unclear
+```
+
+The system should not silently assume India.
+
+---
+
+## TEST 8 — Ayurveda + Foreign Jurisdiction
+
+```text
+I developed an Ayurvedic formulation and want to protect it in Europe.
+```
+
+Expected:
+
+```text
+jurisdiction = international
+```
+
+Do not classify it as India merely because it is Ayurvedic.
+
+---
+
+## TEST 9 — Hindi
+
+```text
+क्या मैं अपनी आयुर्वेदिक फॉर्मूलेशन का भारत में पेटेंट करा सकता हूँ?
+```
+
+Expected:
+
+```text
+language = hi
+jurisdiction = india
+```
+
+The response should remain Hindi.
+
+---
+
+## TEST 10 — Kannada
+
+```text
+ನನ್ನ ಆಯುರ್ವೇದಿಕ್ ಫಾರ್ಮುಲೇಶನ್‌ಗೆ ಅಂತಾರಾಷ್ಟ್ರೀಯವಾಗಿ ಪೇಟೆಂಟ್ ರಕ್ಷಣೆ ಪಡೆಯುವುದು ಹೇಗೆ?
+```
+
+Expected:
+
+```text
+language = kn
+jurisdiction = international
+```
+
+---
+
+# 12. FRONTEND JURISDICTION SELECTOR TEST
+
+Inspect the existing frontend jurisdiction selector.
+
+Do not redesign it.
+
+Test:
+
+### Case A
+
+User selects:
+
+```text
+India
+```
+
+and asks:
+
+```text
+Can I patent this formulation?
+```
+
+Verify that the backend receives the India jurisdiction context.
+
+### Case B
+
+User selects:
+
+```text
+International
+```
+
+and asks:
+
+```text
+Can I patent this formulation?
+```
+
+Verify that the backend receives the international context.
+
+### Case C
+
+User selects:
+
+```text
+India
+```
+
+and asks:
+
+```text
+How does the PCT system work?
+```
+
+Verify that the application handles the explicit international query without silently producing an incorrect India-only answer.
+
+---
+
+# 13. DO NOT MIX SOURCES
+
+Verify that the current retrieval/context layer can distinguish:
+
+```text
+India
+    ↓
+Indian Acts / Rules / IP India / Indian authorities
+
+International
+    ↓
+WIPO / PCT / TRIPS / relevant international sources
+```
+
+For `both`:
+
+```text
+India Evidence
++
+International Evidence
+```
+
+Keep them separately identifiable.
+
+Do not simply concatenate all retrieved documents.
+
+---
+
+# 14. TEST REPORT
+
+After implementation, return:
+
+```text
+JURISDICTION AGENT TEST
+
+Test 1:
+Input:
+Detected:
+Expected:
+Actual:
+Status:
+
+Test 2:
+...
+
+Test 10:
+...
+```
+
+Also report:
+
+```text
+Frontend selector tested: YES/NO
+Language Agent still working: YES/NO
+Scope Agent still working: YES/NO
+India/international source separation: PASS/FAIL
+Files changed:
+```
+
+For failures:
+
+```text
+Problem:
+Root Cause:
+File:
+Fix:
+```
+
+Do not claim PASS unless the test was actually executed.
+
+---
+
+# FINAL RESTRICTION
+
+Implement ONLY the Jurisdiction Agent.
+
+Do NOT implement yet:
+
+* IP Type Router
+* Formulation Classification
+* Patent / Prior-Art Agent
+* Traditional Knowledge Agent
+* ABS Agent
+* International Investigation Agent
+* Knowledge Graph
+* Agentic Orchestrator
+
+The next module will be **IP Type Router** after Jurisdiction is verified.
